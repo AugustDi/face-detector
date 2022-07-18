@@ -24,6 +24,7 @@
             android:layout_height="350dp"
             android:layout_gravity="top"
             android:layout_marginTop="16dp"
+            android:background="@android:color/holo_green_dark"
             android:src="@drawable/img_s_face"
             tools:ignore="ContentDescription" />
 

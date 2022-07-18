@@ -3,13 +3,15 @@ package com.triare.smiledetection
 import android.graphics.*
 import android.os.Bundle
 import android.util.Log
-import android.view.View
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import by.kirich1409.viewbindingdelegate.CreateMethod
 import by.kirich1409.viewbindingdelegate.viewBinding
 import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.*
+import com.google.mlkit.vision.face.FaceContour
+import com.google.mlkit.vision.face.FaceDetection
+import com.google.mlkit.vision.face.FaceDetector
+import com.google.mlkit.vision.face.FaceDetectorOptions
 import com.triare.smiledetection.databinding.ActivityMainBinding
 
 
@@ -62,16 +64,12 @@ class MainActivity : AppCompatActivity() {
                         face.getContour(FaceContour.UPPER_LIP_BOTTOM)?.points
                     val bottomLipTopContour = face.getContour(FaceContour.LOWER_LIP_TOP)?.points
 
-                    drawResult(upperLipBottomContour!!, bottomLipTopContour!!)
+                    val mergedPointsList = mutableListOf<PointF>()
 
-                    Log.d(
-                        MainActivity::class.java.simpleName,
-                        "upperLipBottomContour: $upperLipBottomContour"
-                    )
-                    Log.d(
-                        MainActivity::class.java.simpleName,
-                        "upperLipTopContour: $bottomLipTopContour"
-                    )
+                    mergedPointsList.addAll(upperLipBottomContour!!)
+                    mergedPointsList.addAll(bottomLipTopContour!!)
+
+                    eraseTeeth(mergedPointsList)
                 }
             }
             .addOnFailureListener { e ->
@@ -80,39 +78,40 @@ class MainActivity : AppCompatActivity() {
             }
     }
 
-    private fun drawResult(topLip: List<PointF>, bottomLip: List<PointF>) {
-
-        val myOptions = BitmapFactory.Options()
-        myOptions.inScaled = false
-        myOptions.inDither = true
-        myOptions.inPreferredConfig = Bitmap.Config.ARGB_8888
-        myOptions.inPurgeable = true
-
-        val paintRed = Paint()
-        paintRed.isAntiAlias = true
-        paintRed.color = Color.RED
-
-        val paintBlue = Paint()
-        paintBlue.isAntiAlias = true
-        paintBlue.color = Color.BLUE
-
-        val workingBitmap = Bitmap.createBitmap(getBitmap())
-        val mutableBitmap = workingBitmap.copy(Bitmap.Config.ARGB_8888, true)
-
-        val canvas = Canvas(mutableBitmap)
-
-        topLip.onEach {
-            canvas.drawCircle(it.x, it.y, 10f, paintRed)
-        }
-
-        bottomLip.onEach {
-            canvas.drawCircle(it.x, it.y, 10f, paintBlue)
-        }
-
-        paintBlue.xfermode = PorterDuffXfermode(PorterDuff.Mode.CLEAR)
+    private fun eraseTeeth(pointsList: List<PointF>) {
+        val croppedBitmap =
+            Bitmap.createBitmap(getBitmap().width, getBitmap().height, Bitmap.Config.ARGB_8888)
 
         val imageView = binding.original
         imageView.adjustViewBounds = true
-        imageView.setImageBitmap(mutableBitmap)
+        imageView.setImageBitmap(croppedBitmap)
+
+        val cropCanvas = Canvas(croppedBitmap)
+        val path = Path()
+
+        val paintFill = Paint().apply {
+            isAntiAlias = true
+            style = Paint.Style.FILL
+            xfermode = PorterDuffXfermode(PorterDuff.Mode.SRC_OUT)
+        }
+
+        path.apply {
+            fillType = Path.FillType.EVEN_ODD
+
+            moveTo(pointsList[0].x, pointsList[0].y)
+
+            pointsList.forEachIndexed { index, _ ->
+                if (index != pointsList.size - 1) {
+                    lineTo(pointsList[index + 1].x, pointsList[index + 1].y)
+                } else {
+                    lineTo(pointsList[0].x, pointsList[0].y)
+                }
+            }
+            close()
+        }
+
+        cropCanvas.drawPath(path, paintFill)
+        cropCanvas.drawBitmap(getBitmap(), 0f, 0f, paintFill)
+        imageView.setImageBitmap(croppedBitmap)
     }
 }
